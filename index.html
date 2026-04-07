@@ -302,14 +302,12 @@
         }
         populateSelectMenu();
 
-        // تشغيل أول قناة وسحب الماتشات أوتوماتيك بمجرد فتح الصفحة
+        // تشغيل أول قناة لو موجودة بمجرد فتح الصفحة
         window.onload = function() {
             let firstBtn = document.querySelector('#mainTabs .tab-btn');
             if(firstBtn) {
                 playStream(firstBtn);
             }
-            // السطر السحري اللي هيشغل جلب الماتشات لوحده
-            fetchMatchesFromJson();
         };
 
         let adblockEnabled = true;
