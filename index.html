@@ -2763,9 +2763,9 @@ async function fetchMatchesFromSite() {
 
     const targetUrl = 'https://koora-lives.mov/';
     const proxies = [
-        'https://api.allorigins.win/raw?url=',
+        'https://corsproxy.io/?',
         'https://api.codetabs.com/v1/proxy?quest=',
-        'https://corsproxy.io/?'
+        'https://api.allorigins.win/raw?url='
     ];
 
     let htmlText = null;
@@ -2774,13 +2774,21 @@ async function fetchMatchesFromSite() {
             let response = await fetch(proxy + encodeURIComponent(targetUrl));
             if (response.ok) {
                 htmlText = await response.text();
-                break; // لو نجح، يوقف بحث ويكمل
+                break; 
             }
         } catch (e) { console.log("Proxy failed: " + proxy); }
     }
 
     if (!htmlText) {
-        alert("فشل السحب من كل السيرفرات! غالباً حماية الموقع قوية أو محتاج تفتح المشغل على Live Server.");
+        alert("فشل السحب! جرب من لينك الـ GitHub بتاعك مش من الكمبيوتر.");
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+        return;
+    }
+
+    // فحص ذكي لحماية كلاود فلير
+    if (htmlText.includes('Cloudflare') || htmlText.includes('Just a moment') || htmlText.includes('cf-browser-verification')) {
+        alert("🛡️ موقع Koora Lives مشغل حماية Cloudflare حالياً والبروكسي مش قادر يتخطاها. جرب وقت الماتشات.");
         btn.innerHTML = originalText;
         btn.disabled = false;
         return;
@@ -2789,28 +2797,38 @@ async function fetchMatchesFromSite() {
     try {
         const parser = new DOMParser();
         const doc = parser.parseFromString(htmlText, "text/html");
-        const matchLinks = doc.querySelectorAll('a[href*="/match/"], a[href*="/live/"]'); 
+        // توسيع نطاق البحث عن الروابط
+        const matchLinks = doc.querySelectorAll('a[href*="match"], a[href*="live"], a[href*="koora"]'); 
         
         if(matchLinks.length === 0) {
-            alert("مفيش ماتشات لايف دلوقتي أو هيكل الموقع اتغير!");
+            alert("مفيش ماتشات بدأت دلوقتي! (غالباً الروابط بتظهر وقت الماتش بس)");
+            btn.innerHTML = originalText;
+            btn.disabled = false;
             return;
         }
 
         let addedCount = 0;
+        let seenUrls = new Set();
+
         matchLinks.forEach((link, index) => {
-            let matchName = link.innerText.trim() || `ماتش ${index + 1}`;
-            let matchUrl = link.href.replace(window.location.origin, 'https://koora-lives.mov'); 
+            let matchUrl = link.href;
+            if(!matchUrl.startsWith('http')) matchUrl = matchUrl.replace(window.location.origin, 'https://koora-lives.mov'); 
+            
+            if(!seenUrls.has(matchUrl) && !matchUrl.includes('javascript:')) {
+                seenUrls.add(matchUrl);
+                let matchName = link.innerText.trim().replace(/\s+/g, ' ') || `ماتش ${addedCount + 1}`;
+                
+                let newId = "btn_match_" + new Date().getTime() + addedCount;
+                let newBtn = document.createElement("button");
+                newBtn.id = newId;
+                newBtn.className = "tab-btn";
+                newBtn.setAttribute("data-link", matchUrl);
+                newBtn.innerText = "🔥 " + (matchName.length > 25 ? matchName.substring(0, 25) + '...' : matchName); 
+                newBtn.setAttribute("onclick", "playStream(this)");
 
-            let newId = "btn_match_" + new Date().getTime() + index;
-            let newBtn = document.createElement("button");
-            newBtn.id = newId;
-            newBtn.className = "tab-btn";
-            newBtn.setAttribute("data-link", matchUrl);
-            newBtn.innerText = "🔥 " + matchName; 
-            newBtn.setAttribute("onclick", "playStream(this)");
-
-            document.getElementById("mainTabs").appendChild(newBtn);
-            addedCount++;
+                document.getElementById("mainTabs").appendChild(newBtn);
+                addedCount++;
+            }
         });
 
         alert(`تم سحب ${addedCount} ماتش بنجاح!`);
@@ -2828,14 +2846,14 @@ async function fetchMatchesFromSite() {
 async function fetchYallaShootMatches() {
     const btn = document.getElementById('scrapeYallaBtn');
     const originalText = btn.innerHTML;
-    btn.innerHTML = "⏳ جاري سحب ماتشات يلا شوت...";
+    btn.innerHTML = "⏳ جاري سحب يلا شوت...";
     btn.disabled = true;
 
     const targetUrl = 'https://www.yallashoot.video/home6/';
     const proxies = [
-        'https://api.allorigins.win/raw?url=',
+        'https://corsproxy.io/?',
         'https://api.codetabs.com/v1/proxy?quest=',
-        'https://corsproxy.io/?'
+        'https://api.allorigins.win/raw?url='
     ];
 
     let htmlText = null;
@@ -2850,7 +2868,14 @@ async function fetchYallaShootMatches() {
     }
 
     if (!htmlText) {
-        alert("فشل السحب من يلا شوت! السيرفرات الوسيطة واقعة أو الموقع عامل حظر.");
+        alert("فشل السحب من يلا شوت! السيرفرات الوسيطة واقعة.");
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+        return;
+    }
+
+    if (htmlText.includes('Cloudflare') || htmlText.includes('Just a moment')) {
+        alert("🛡️ موقع يلا شوت قافل السحب بحماية Cloudflare حالياً.");
         btn.innerHTML = originalText;
         btn.disabled = false;
         return;
@@ -2862,29 +2887,32 @@ async function fetchYallaShootMatches() {
         let matchLinks = Array.from(doc.querySelectorAll('a'));
         
         let filteredMatches = matchLinks.filter(link => {
-            let href = link.getAttribute('href');
-            return href && href.endsWith('.html') && !href.includes('category'); 
+            let href = link.getAttribute('href') || '';
+            return (href.endsWith('.html') || href.includes('match') || href.includes('live')) && !href.includes('category'); 
         });
 
         let uniqueMatches = [];
         let seenUrls = new Set();
         
         filteredMatches.forEach(link => {
-            if (!seenUrls.has(link.href)) {
-                seenUrls.add(link.href);
+            let href = link.getAttribute('href');
+            if (!seenUrls.has(href)) {
+                seenUrls.add(href);
                 uniqueMatches.push(link);
             }
         });
 
         if(uniqueMatches.length === 0) {
-            alert("مفيش ماتشات لايف دلوقتي على يلا شوت أو شكل الموقع اتغير!");
+            alert("مفيش ماتشات لايف دلوقتي على يلا شوت أو الموقع غير لينكاته!");
+            btn.innerHTML = originalText;
+            btn.disabled = false;
             return;
         }
 
         let addedCount = 0;
         uniqueMatches.forEach((link, index) => {
             let matchName = link.innerText.replace(/\s+/g, ' ').trim();
-            if (matchName === "" || matchName.length < 5) matchName = `ماتش يلا شوت ${index + 1}`;
+            if (matchName === "" || matchName.length < 5) matchName = `يلا شوت ${index + 1}`;
 
             let matchUrl = link.getAttribute('href');
             if (!matchUrl.startsWith('http')) {
@@ -2896,7 +2924,7 @@ async function fetchYallaShootMatches() {
             newBtn.id = newId;
             newBtn.className = "tab-btn";
             newBtn.setAttribute("data-link", matchUrl);
-            newBtn.innerText = "📺 " + matchName; 
+            newBtn.innerText = "📺 " + (matchName.length > 25 ? matchName.substring(0, 25) + '...' : matchName); 
             newBtn.setAttribute("onclick", "playStream(this)");
 
             document.getElementById("mainTabs").appendChild(newBtn);
@@ -2921,11 +2949,12 @@ async function fetchAflam4YouMatches() {
     btn.innerHTML = "⏳ جاري سحب قنوات Aflam4You...";
     btn.disabled = true;
 
-    const targetUrl = 'https://live.aflam4you.net/browse-watch-koora_live-tv-live-videos-1-date.html';
+    // تم تغيير الرابط للرئيسية لضمان وجود قنوات دايماً
+    const targetUrl = 'https://live.aflam4you.net/';
     const proxies = [
-        'https://api.allorigins.win/raw?url=',
+        'https://corsproxy.io/?',
         'https://api.codetabs.com/v1/proxy?quest=',
-        'https://corsproxy.io/?'
+        'https://api.allorigins.win/raw?url='
     ];
 
     let htmlText = null;
@@ -2940,7 +2969,14 @@ async function fetchAflam4YouMatches() {
     }
 
     if (!htmlText) {
-        alert("فشل السحب من Aflam4You! حاول تفتح الموقع بـ Live Server عشان الحماية تتفك.");
+        alert("فشل السحب من Aflam4You!");
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+        return;
+    }
+
+    if (htmlText.includes('Cloudflare') || htmlText.includes('Just a moment')) {
+        alert("🛡️ موقع Aflam4You قافل السحب بحماية Cloudflare حالياً.");
         btn.innerHTML = originalText;
         btn.disabled = false;
         return;
@@ -2951,10 +2987,9 @@ async function fetchAflam4YouMatches() {
         const doc = parser.parseFromString(htmlText, "text/html");
         let matchLinks = Array.from(doc.querySelectorAll('a'));
         
-        // وسعنا دايرة البحث هنا عشان لو شالوا كلمة watch
         let filteredMatches = matchLinks.filter(link => {
-            let href = link.getAttribute('href');
-            return href && (href.includes('watch') || href.includes('video') || href.includes('vid=')) && !href.includes('browse') && !href.includes('category');
+            let href = link.getAttribute('href') || '';
+            return (href.includes('watch') || href.includes('video') || href.includes('vid=') || href.includes('live')) && !href.includes('browse') && !href.includes('category');
         });
 
         let uniqueMatches = [];
@@ -2977,8 +3012,9 @@ async function fetchAflam4YouMatches() {
         });
 
         if(uniqueMatches.length === 0) {
-            console.log(htmlText); 
-            alert("مفيش قنوات لايف دلوقتي أو شكل لينكات الموقع اتغير!");
+            alert("مفيش قنوات لايف دلوقتي في Aflam4You أو شكل الموقع اتغير!");
+            btn.innerHTML = originalText;
+            btn.disabled = false;
             return;
         }
 
@@ -3009,7 +3045,6 @@ async function fetchAflam4YouMatches() {
     }
 }
 </script>
-
     <footer style="background: rgba(13, 17, 30, 0.45); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); border-top: 1px solid rgba(255, 255, 255, 0.15); padding: 30px 20px; text-align: center; color: #fff; margin-top: 40px; box-shadow: 0 -10px 30px rgba(0,0,0,0.5);">
         <p style="font-size: 22px; font-weight: bold; text-shadow: 0 0 10px rgba(255,255,255,0.4); margin-bottom: 10px; letter-spacing: 1px;">© 2027 _ 2026 ENG OMAR TV. All Rights Reserved.</p>
         <p style="color: #2ecc71; text-shadow: 0 0 10px rgba(46, 204, 113, 0.6); font-size: 18px; font-weight: bold; margin-bottom: 25px;">اللَّهُمَّ صَلِّ وَسَلِّمْ عَلَى سَيِّدِنَا مُحَمَّدٍ ﷺ</p>
